@@ -1,4 +1,7 @@
-export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { localAirports, localSearch } from "./local";
+
+// With NEXT_PUBLIC_API_URL set the UI talks to the FastAPI backend; otherwise the engine runs in the browser.
+export const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export const OBJ = ["price", "duration_min", "stops", "wait_min", "risk"] as const;
 export type ObjKey = (typeof OBJ)[number];
@@ -22,12 +25,14 @@ export type SearchResponse = {
 export type Airport = { code: string; name: string; x: number; y: number; hub: boolean };
 
 export async function getAirports(): Promise<Airport[]> {
+  if (!API) return localAirports();
   const r = await fetch(`${API}/api/v1/airports`);
   if (!r.ok) throw new Error(`airports: ${r.status}`);
   return r.json();
 }
 
 export async function search(body: Record<string, unknown>): Promise<SearchResponse> {
+  if (!API) return localSearch(body);
   const r = await fetch(`${API}/api/v1/search`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, limit: 500 }),
   });

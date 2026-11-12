@@ -28,7 +28,7 @@ export default function ItineraryCard({ it, rank, active, onClick }: { it: Itine
         <span className="rank">#{rank}</span>
         <b>{fmt("price", o.price)}</b>
         <span>{fmt("duration_min", o.duration_min)} in transit</span>
-        <span>{o.stops} stops</span>
+        <span>{o.stops} {o.stops === 1 ? "stop" : "stops"}</span>
         <span>risk {fmt("risk", o.risk)}</span>
         {it.is_knee && <span className="badge">best compromise</span>}
       </div>

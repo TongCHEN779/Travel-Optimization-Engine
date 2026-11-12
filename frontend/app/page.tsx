@@ -23,7 +23,7 @@ export default function Home() {
     getAirports().then((a) => {
       setAirports(a);
       setForm((f) => ({ ...f, origin: a[5]?.code ?? a[0].code, destination: a[20]?.code ?? a[1].code }));
-    }).catch((e) => setErr(`Cannot reach API (${e.message}). Start it: uvicorn tripopt.api.main:app`));
+    }).catch((e) => setErr(`Cannot load data (${e.message})`));
   }, []);
 
   async function run() {
@@ -69,7 +69,7 @@ export default function Home() {
     <main>
       <header>
         <h1>Travel Optimization Engine</h1>
-        <p className="muted">Exact Pareto-optimal round trips over price, duration, stops, layover wait and risk. Synthetic network.</p>
+        <p className="muted">Exact Pareto-optimal round trips over price, duration, stops, layover wait and risk. Synthetic network, optimised live in your browser.</p>
       </header>
       <div className="layout">
         <aside>

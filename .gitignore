@@ -7,3 +7,6 @@ node_modules/
 .next/
 .env
 backend/benchmarks/results/*.csv
+frontend/out/
+*.tsbuildinfo
+next-env.d.ts

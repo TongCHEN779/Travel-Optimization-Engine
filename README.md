@@ -4,6 +4,8 @@ Multi-objective itinerary optimisation for round-trip flights. Instead of sortin
 the **exact Pareto front** over price, total duration, stops, layover wait and disruption risk on a time-expanded
 flight graph, then lets the user trade objectives off with weights and hard constraints.
 
+**Live demo:** deployed to GitHub Pages by `.github/workflows/pages.yml` (no server: the engine runs in the browser).
+
 **Status: Phases 1-2 complete** (engine, synthetic data, API, tests, benchmarks, web UI). PostgreSQL and real
 flight-API ingestion are the next phases (see Roadmap).
 
@@ -17,8 +19,14 @@ python benchmarks/run_benchmarks.py --quick      # algorithm comparison
 uvicorn tripopt.api.main:app --reload            # http://localhost:8000/docs
 
 # in a second terminal
-cd frontend && npm install && npm run dev         # http://localhost:3000 (API URL: NEXT_PUBLIC_API_URL)
+cd frontend && npm install && npm run dev         # http://localhost:3000, engine runs in-browser; no backend needed
 ```
+
+**Serverless demo.** `frontend/lib/engine.ts` is a TypeScript port of the Python engine, running in the browser on
+the pre-generated network `frontend/public/data/network.json`. `npm run verify` checks it reproduces the Python
+Pareto fronts exactly on golden cases (`python backend/scripts/export_network.py` regenerates data and fixtures);
+CI runs this before every deploy. Set `NEXT_PUBLIC_API_URL` to use the FastAPI backend instead.
+To enable Pages: repo Settings → Pages → Source: GitHub Actions.
 
 **Web UI** (`frontend/`, Next.js + TypeScript, dependency-free SVG charts): query form, trade-off scatter (choose any
 two objectives), 5-objective parallel coordinates, live preference sliders and hard-limit sliders, expandable
