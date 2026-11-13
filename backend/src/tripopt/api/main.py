@@ -13,7 +13,7 @@ from ..graph import TemporalGraph
 from ..models import OBJECTIVES, Constraints, RoundTripQuery
 from ..roundtrip import optimize_round_trip
 from ..selection import knee_index, weighted_scores
-from ..synthetic import SyntheticConfig, generate
+from ..world import EPOCH, build_world, instantiate
 
 app = FastAPI(title="Travel Optimization Engine", version="0.1.0")
 app.add_middleware(
@@ -23,15 +23,14 @@ app.add_middleware(
 
 
 @lru_cache(maxsize=1)
-def _state():
-    ds = generate(SyntheticConfig(seed=int(os.getenv("SYNTH_SEED", "7"))))
-    return ds, TemporalGraph(ds.flights)
+def _world():
+    return build_world()
 
 
 class SearchRequest(BaseModel):
     origin: str
     destination: str
-    depart_from_day: int = Field(ge=0)
+    depart_from_day: int = Field(ge=0, description=f"local calendar day, as days since {EPOCH}")
     depart_to_day: int = Field(ge=0)
     min_stay_days: int = Field(default=3, ge=1)
     max_stay_days: int = Field(default=10, ge=1)
@@ -46,9 +45,11 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
 
 
-def _flight_json(f):
+def _flight_json(f, w):
+    a, z = w.airports[f.origin], w.airports[f.dest]
     return {"id": f.id, "from": f.origin, "to": f.dest, "dep_min": f.dep, "arr_min": f.arr,
-            "price": f.price_cents / 100, "airline": f.airline}
+            "price": f.price_cents / 100, "airline": f.airline, "from_city": a.city, "to_city": z.city,
+            "off_from": a.offset_min, "off_to": z.offset_min}
 
 
 @app.get("/health")
@@ -58,15 +59,16 @@ def health():
 
 @app.get("/api/v1/airports")
 def airports():
-    ds, _ = _state()
-    return [{"code": a.code, "name": a.name, "x": a.x, "y": a.y, "hub": a.is_hub} for a in ds.airports.values()]
+    w = _world()
+    return [{"code": a.code, "name": a.name, "city": a.city, "country": a.country, "region": a.region,
+             "lat": a.lat, "lon": a.lon, "offset": a.offset_min, "hub": a.hub} for a in w.airports.values()]
 
 
 @app.post("/api/v1/search")
 def search(req: SearchRequest):
-    ds, g = _state()
+    w = _world()
     for code in (req.origin, req.destination):
-        if code not in ds.airports:
+        if code not in w.airports:
             raise HTTPException(422, f"unknown airport {code}")
     if req.origin == req.destination:
         raise HTTPException(422, "origin and destination must differ")
@@ -80,20 +82,22 @@ def search(req: SearchRequest):
         max_risk_micro=None if req.max_risk is None else int(req.max_risk * 1e6),
     )
     q = RoundTripQuery(req.origin, req.destination, req.depart_from_day, req.depart_to_day,
-                       req.min_stay_days, req.max_stay_days, c)
+                       req.min_stay_days, req.max_stay_days, c,
+                       w.airports[req.origin].offset_min, w.airports[req.destination].offset_min)
+    g = TemporalGraph(instantiate(w, q.depart_from_day - 1, q.depart_to_day + 3 + q.max_stay_days + 4))
     t0 = time.perf_counter()
     res = optimize_round_trip(g, q)
     elapsed = time.perf_counter() - t0
     front = res.front
     out = []
     if front:
-        w = None
+        wt = None
         if req.weights:
             bad = set(req.weights) - set(OBJECTIVES)
             if bad:
                 raise HTTPException(422, f"unknown weight keys {sorted(bad)}")
-            w = tuple(req.weights.get(k, 0.0) for k in OBJECTIVES)
-        scores = weighted_scores(front, w)
+            wt = tuple(req.weights.get(k, 0.0) for k in OBJECTIVES)
+        scores = weighted_scores(front, wt)
         knee = knee_index(front)
         order = sorted(range(len(front)), key=lambda i: scores[i])[: req.limit]
         for i in order:
@@ -102,8 +106,8 @@ def search(req: SearchRequest):
                 "score": float(scores[i]), "is_knee": i == knee,
                 "objectives": {"price": it.vec[0] / 100, "duration_min": it.vec[1], "stops": it.vec[2],
                                "wait_min": it.vec[3], "risk": it.vec[4] / 1e6},
-                "outbound": [_flight_json(g.by_id[x]) for x in it.flights[: it.split]],
-                "inbound": [_flight_json(g.by_id[x]) for x in it.flights[it.split :]],
+                "outbound": [_flight_json(g.by_id[x], w) for x in it.flights[: it.split]],
+                "inbound": [_flight_json(g.by_id[x], w) for x in it.flights[it.split :]],
             })
     return {
         "pareto_size": len(front), "returned": len(out), "itineraries": out,

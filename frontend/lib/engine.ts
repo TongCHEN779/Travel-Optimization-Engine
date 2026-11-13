@@ -13,7 +13,8 @@ export type Constraints = {
   maxStops: number; mct: number; maxLayover: number; pax: number;
   maxPrice?: number | null; maxDuration?: number | null; maxWait?: number | null; maxRisk?: number | null;
 };
-export type RoundTripQuery = { origin: string; dest: string; from: number; to: number; minStay: number; maxStay: number; c: Constraints };
+/** from/to/stay are local calendar days (days since the epoch); offO/offD are standard UTC offsets in minutes. */
+export type RoundTripQuery = { origin: string; dest: string; from: number; to: number; minStay: number; maxStay: number; c: Constraints; offO?: number; offD?: number };
 export type Path = { flights: number[]; vec: Vec; split?: number };
 export type Stats = { generated: number; kept: number };
 
@@ -91,7 +92,7 @@ export class Graph {
 
 type Label = { v: Vec; parent: [number, number] | null };
 
-function legFronts(g: Graph, origin: string, dest: string, depFrom: number, depTo: number, c: Constraints, byArrDay: boolean, stats: Stats): Map<number, Path[]> {
+function legFronts(g: Graph, origin: string, dest: string, depFrom: number, depTo: number, c: Constraints, byArrDay: boolean, stats: Stats, arrOffset = 0): Map<number, Path[]> {
   const bounds: [number, number | null | undefined][] = [[0, c.maxPrice], [1, c.maxDuration], [3, c.maxWait], [4, c.maxRisk]];
   const finite = bounds.filter(([, b]) => b != null) as [number, number][];
   const flights = g.usable(origin, dest, depFrom, depTo, c);
@@ -134,7 +135,7 @@ function legFronts(g: Graph, origin: string, dest: string, depFrom: number, depT
   for (const [fid, ls] of labels) {
     const f = g.byId.get(fid)!;
     if (f.d !== dest) continue;
-    const key = byArrDay ? Math.floor(f.arr / DAY) : 0;
+    const key = byArrDay ? Math.floor((f.arr + arrOffset) / DAY) : 0;
     const arr = groups.get(key) ?? groups.set(key, []).get(key)!;
     ls.forEach((l, idx) => arr.push({ flights: rebuild(fid, idx), vec: l.v }));
   }
@@ -145,7 +146,8 @@ function legFronts(g: Graph, origin: string, dest: string, depFrom: number, depT
 export function optimizeRoundTrip(g: Graph, q: RoundTripQuery): { front: Path[]; stats: Stats; combinations: number } {
   const stats: Stats = { generated: 0, kept: 0 };
   const c = q.c;
-  const outByDay = legFronts(g, q.origin, q.dest, q.from * DAY, (q.to + 1) * DAY - 1, c, true, stats);
+  const oo = q.offO ?? 0, od = q.offD ?? 0;
+  const outByDay = legFronts(g, q.origin, q.dest, q.from * DAY - oo, (q.to + 1) * DAY - 1 - oo, c, true, stats, od);
   if (!outByDay.size) return { front: [], stats, combinations: 0 };
 
   const retDays = new Set<number>();
@@ -154,7 +156,7 @@ export function optimizeRoundTrip(g: Graph, q: RoundTripQuery): { front: Path[];
   const results: Path[] = [];
   let combinations = 0;
   for (const r of [...retDays].sort((a, b) => a - b)) {
-    const back = legFronts(g, q.dest, q.origin, r * DAY, (r + 1) * DAY - 1, c, false, stats).get(0);
+    const back = legFronts(g, q.dest, q.origin, r * DAY - od, (r + 1) * DAY - 1 - od, c, false, stats).get(0);
     if (!back?.length) continue;
     let pool: Path[] = [];
     for (const [a, lst] of outByDay) if (r - a >= q.minStay && r - a <= q.maxStay) pool = pool.concat(lst);

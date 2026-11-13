@@ -54,5 +54,9 @@ Exactness requires keeping, per coupling key, a full Pareto front:
 *Proof sketch.* If outbound path `x` is dominated by `x'` with the same arrival day (or pooled admissible days),
 then `x' + y` dominates `x + y` for every compatible inbound `y` and is itself compatible. Symmetric for inbound.
 
-Not modelled yet: time zones (one global clock), baggage/fare rules, airport-specific MCT, seat inventory beyond a
+**Time zones.** All timestamps are minutes since 2024-01-01 00:00 UTC, so durations and layovers are true elapsed
+time. Stay length is counted in *local* calendar days at the destination (outbound arrival day vs. return
+departure day); departure windows are local days at each end. Offsets are fixed standard time (no DST).
+
+Not modelled yet: daylight saving, baggage/fare rules, airport-specific MCT, seat inventory beyond a
 per-flight count.

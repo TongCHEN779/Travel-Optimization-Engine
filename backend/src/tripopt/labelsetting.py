@@ -95,7 +95,8 @@ def _reconstruct(labels, fid: int, idx: int) -> tuple[int, ...]:
 
 
 def leg_fronts(
-    graph: TemporalGraph, q: LegQuery, by_arrival_day: bool = False, stats: SearchStats | None = None
+    graph: TemporalGraph, q: LegQuery, by_arrival_day: bool = False, stats: SearchStats | None = None,
+    arr_offset: int = 0,
 ) -> dict[int, list[Itinerary]]:
     """Pareto fronts for a single leg, optionally one front per arrival day.
 
@@ -110,7 +111,7 @@ def leg_fronts(
         f = graph.by_id[fid]
         if f.dest != q.dest:
             continue
-        key = f.arr_day if by_arrival_day else 0
+        key = (f.arr + arr_offset) // MINUTES_PER_DAY if by_arrival_day else 0
         for idx, (v, _) in enumerate(lst):
             groups.setdefault(key, []).append(Itinerary(_reconstruct(labels, fid, idx), v))  # type: ignore[arg-type]
     return {k: pareto_filter(v, key=lambda it: it.vec) for k, v in groups.items()}

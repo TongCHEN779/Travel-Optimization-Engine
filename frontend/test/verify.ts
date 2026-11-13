@@ -1,20 +1,21 @@
-// Checks that the TypeScript engine reproduces the Python engine's Pareto fronts exactly.
+// Checks that the TypeScript engine + schedule generator reproduce the Python engine's Pareto fronts exactly.
 // Run: npm run verify   (fixtures: backend/scripts/export_network.py)
 import { readFileSync } from "node:fs";
-import { Graph, optimizeRoundTrip, type Flt } from "../lib/engine";
+import { Graph, optimizeRoundTrip } from "../lib/engine";
+import { instantiate, scheduleWindow, type World } from "../lib/world";
 
-const net = JSON.parse(readFileSync(new URL("../public/data/network.json", import.meta.url), "utf8"));
+const world: World = JSON.parse(readFileSync(new URL("../public/data/world.json", import.meta.url), "utf8"));
 const golden = JSON.parse(readFileSync(new URL("./golden.json", import.meta.url), "utf8"));
-const flights: Flt[] = net.flights.map((r: number[] & string[]) => ({
-  id: r[0], o: r[1], d: r[2], dep: r[3], arr: r[4], price: r[5], airline: r[6], risk: r[7], seats: r[8],
-}));
-const g = new Graph(flights);
+const off = new Map(world.airports.map((a) => [a.code, a.offset]));
 
 let failed = 0, nonEmpty = 0, points = 0;
 for (const [i, t] of golden.entries()) {
   const q = t.query;
+  const [lo, hi] = scheduleWindow(q.from, q.to, q.maxStay);
+  const g = new Graph(instantiate(world, lo, hi));
   const res = optimizeRoundTrip(g, {
     origin: q.origin, dest: q.dest, from: q.from, to: q.to, minStay: q.minStay, maxStay: q.maxStay,
+    offO: off.get(q.origin), offD: off.get(q.dest),
     c: { maxStops: q.maxStops, mct: q.mct, maxLayover: q.maxLayover, pax: q.pax, maxPrice: q.maxPrice, maxDuration: q.maxDuration },
   });
   const got = res.front.map((p) => p.vec.join(",")).sort();

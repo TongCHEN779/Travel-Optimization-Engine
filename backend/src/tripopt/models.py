@@ -95,6 +95,8 @@ class RoundTripQuery:
     min_stay_days: int = 1
     max_stay_days: int = 14
     constraints: Constraints = field(default_factory=Constraints)
+    origin_offset: int = 0  # standard UTC offset of origin / destination in minutes; days are local
+    dest_offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)

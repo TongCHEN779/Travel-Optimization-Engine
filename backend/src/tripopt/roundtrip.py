@@ -35,17 +35,18 @@ class RoundTripResult:
 def optimize_round_trip(graph: TemporalGraph, q: RoundTripQuery) -> RoundTripResult:
     stats = SearchStats()
     c = q.constraints
+    oo, do = q.origin_offset, q.dest_offset  # days are local calendar days at each end
     out_q = LegQuery(
-        q.origin, q.dest, q.depart_from_day * MINUTES_PER_DAY, (q.depart_to_day + 1) * MINUTES_PER_DAY - 1, c
+        q.origin, q.dest, q.depart_from_day * MINUTES_PER_DAY - oo, (q.depart_to_day + 1) * MINUTES_PER_DAY - 1 - oo, c
     )
-    out_by_day = leg_fronts(graph, out_q, by_arrival_day=True, stats=stats)
+    out_by_day = leg_fronts(graph, out_q, by_arrival_day=True, stats=stats, arr_offset=do)
     if not out_by_day:
         return RoundTripResult([], stats)
 
     ret_days = sorted({a + s for a in out_by_day for s in range(q.min_stay_days, q.max_stay_days + 1)})
     in_by_day: dict[int, list[Itinerary]] = {}
     for r in ret_days:
-        iq = LegQuery(q.dest, q.origin, r * MINUTES_PER_DAY, (r + 1) * MINUTES_PER_DAY - 1, c)
+        iq = LegQuery(q.dest, q.origin, r * MINUTES_PER_DAY - do, (r + 1) * MINUTES_PER_DAY - 1 - do, c)
         front = leg_fronts(graph, iq, by_arrival_day=False, stats=stats).get(0, [])
         if front:
             in_by_day[r] = front

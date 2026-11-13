@@ -40,3 +40,5 @@ svg { width: 100%; height: auto; display: block; }
 .error { background: color-mix(in srgb, var(--c3) 14%, var(--panel)); border: 1px solid var(--c3); padding: 10px 12px; border-radius: 8px; }
 .empty { padding: 40px 0; text-align: center; }
 @media (max-width: 900px) { .layout, .charts { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr 1fr; } }
+
+.notice { margin: 8px 0 0; padding: 8px 12px; font-size: 12.5px; border: 1px solid var(--c2); border-radius: 8px; background: color-mix(in srgb, var(--c2) 12%, var(--panel)); }

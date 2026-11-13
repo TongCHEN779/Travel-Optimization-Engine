@@ -136,17 +136,30 @@ def _all_paths(g, q):
 
 
 def test_api_search_smoke():
+    from datetime import date
+
     from fastapi.testclient import TestClient
 
-    from tripopt.api.main import _state, app
+    from tripopt.api.main import app
+    from tripopt.world import day_index
 
-    ds, _ = _state()
-    codes = list(ds.airports)
     cl = TestClient(app)
-    r = cl.post("/api/v1/search", json={"origin": codes[5], "destination": codes[20], "depart_from_day": 2,
-                                        "depart_to_day": 4, "min_stay_days": 3, "max_stay_days": 6})
+    d = day_index(date(2027, 3, 1))
+    r = cl.post("/api/v1/search", json={"origin": "JFK", "destination": "LHR", "depart_from_day": d,
+                                        "depart_to_day": d + 2, "min_stay_days": 3, "max_stay_days": 6})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["pareto_size"] >= 1 and body["itineraries"][0]["outbound"]
-    assert cl.post("/api/v1/search", json={"origin": "ZZZ", "destination": codes[1], "depart_from_day": 0,
+    first = body["itineraries"][0]["outbound"][0]
+    assert body["pareto_size"] >= 1 and first["from_city"] == "New York" and first["off_from"] == -300
+    assert cl.post("/api/v1/search", json={"origin": "ZZZ", "destination": "LHR", "depart_from_day": 0,
                                            "depart_to_day": 1}).status_code == 422
+
+
+def test_world_instantiation_is_timezone_consistent():
+    from tripopt.world import build_world, instantiate
+
+    w = build_world()
+    fl = instantiate(w, 400, 402)
+    assert fl and all(f.arr > f.dep for f in fl)
+    # local departure day (origin) must be within the instantiated range
+    assert all(400 <= (f.dep + w.airports[f.origin].offset_min) // 1440 <= 402 for f in fl)

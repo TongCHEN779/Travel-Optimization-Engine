@@ -9,6 +9,18 @@ flight graph, then lets the user trade objectives off with weights and hard cons
 **Status: Phases 1-2 complete** (engine, synthetic data, API, tests, benchmarks, web UI). PostgreSQL and real
 flight-API ingestion are the next phases (see Roadmap).
 
+## Data: what is real, what is simulated
+| Real | Simulated (clearly labelled in the UI) |
+|---|---|
+| 66 global airports: IATA code, name, city, country, coordinates, standard UTC offset | which routes exist, timetables |
+| Calendar dates and weekdays; local-time display | fares (distance-based model + date demand) |
+| Carrier names, assigned by home region | which carrier flies a route, disruption risk |
+
+`backend/src/tripopt/world.py` builds weekly timetable templates; `instantiate` expands them for any real date, so
+any date can be searched. Nothing is a real offer. To use real offers, replace `instantiate` with an API
+ingestion step producing the same `Flight` records (see Roadmap). Simplifications: standard time only (no DST), a
+single fare per flight (no fare classes), no baggage rules.
+
 ## Quick start
 ```bash
 cd backend
@@ -23,7 +35,7 @@ cd frontend && npm install && npm run dev         # http://localhost:3000, engin
 ```
 
 **Serverless demo.** `frontend/lib/engine.ts` is a TypeScript port of the Python engine, running in the browser on
-the pre-generated network `frontend/public/data/network.json`. `npm run verify` checks it reproduces the Python
+the world model `frontend/public/data/world.json` (real airports + weekly simulated templates, expanded for your dates). `npm run verify` checks it reproduces the Python
 Pareto fronts exactly on golden cases (`python backend/scripts/export_network.py` regenerates data and fixtures);
 CI runs this before every deploy. Set `NEXT_PUBLIC_API_URL` to use the FastAPI backend instead.
 To enable Pages: repo Settings → Pages → Source: GitHub Actions.
@@ -33,10 +45,10 @@ two objectives), 5-objective parallel coordinates, live preference sliders and h
 itineraries with layovers. Weights and limits re-rank/filter client-side with no re-query: filtering the exact front by
 upper bounds gives exactly the constrained front (docs/MODEL.md).
 Example: `POST /api/v1/search` with
-`{"origin":"AAA","destination":"ABA","depart_from_day":2,"depart_to_day":4,"min_stay_days":3,"max_stay_days":7,
+`{"origin":"JFK","destination":"SIN","depart_from_day":1155,"depart_to_day":1157,"min_stay_days":5,"max_stay_days":10,
 "max_stops":2,"weights":{"price":3,"risk":1}}`
 returns the Pareto-optimal round trips ranked by your weights, a knee ("best compromise") flag and search stats.
-`GET /api/v1/airports` lists valid codes.
+`GET /api/v1/airports` lists valid codes. Days are local calendar days counted from 2024-01-01 (`depart_from_day`).
 
 ## Layout
 ```
