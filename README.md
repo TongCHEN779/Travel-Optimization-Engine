@@ -1,70 +1,103 @@
 # Travel Optimization Engine
 
-Multi-objective itinerary optimisation for round-trip flights. Instead of sorting by one score, the engine computes
-the **exact Pareto front** over price, total duration, stops, layover wait and disruption risk on a time-expanded
-flight graph, then lets the user trade objectives off with weights and hard constraints.
+Multi-objective flight itinerary search. Instead of ranking by a single score, it computes the **exact Pareto front**
+of round trips over five objectives (price, total duration, stops, layover wait, disruption risk) and lets you trade
+them off interactively with preference weights and hard limits.
 
-**Live demo:** deployed to GitHub Pages by `.github/workflows/pages.yml` (no server: the engine runs in the browser).
+> **Data notice.** Airports, cities, time zones, dates and carrier names are real. Routes, timetables, fares and
+> risk are **simulated**. Nothing here is a bookable offer. See [Data](#data).
 
-**Status: Phases 1-2 complete** (engine, synthetic data, API, tests, benchmarks, web UI). PostgreSQL and real
-flight-API ingestion are the next phases (see Roadmap).
+**Live demo:** GitHub Pages, no server needed. The optimizer runs in your browser
+(setup: repo Settings → Pages → Source: *GitHub Actions*).
 
-## Data: what is real, what is simulated
-| Real | Simulated (clearly labelled in the UI) |
-|---|---|
-| 66 global airports: IATA code, name, city, country, coordinates, standard UTC offset | which routes exist, timetables |
-| Calendar dates and weekdays; local-time display | fares (distance-based model + date demand) |
-| Carrier names, assigned by home region | which carrier flies a route, disruption risk |
-
-`backend/src/tripopt/world.py` builds weekly timetable templates; `instantiate` expands them for any real date, so
-any date can be searched. Nothing is a real offer. To use real offers, replace `instantiate` with an API
-ingestion step producing the same `Flight` records (see Roadmap). Simplifications: standard time only (no DST), a
-single fare per flight (no fare classes), no baggage rules.
+## Features
+- **Exact optimizer**: multi-objective label-setting with dominance pruning on a temporal flight graph; verified
+  against brute force.
+- **Round trips with real calendars**: date ranges, stay length, passengers, max stops; time-zone-aware.
+- **Airport search boxes**: type a city, country, airport name or IATA code (Chinese names work too, e.g. 东京) and pick
+  from live suggestions, with keyboard navigation and a swap button.
+- **Interactive UI**: trade-off scatter (any two objectives), parallel coordinates, live weight sliders and hard-limit
+  sliders, expandable itineraries with local times and layovers, a "best compromise" pick.
+- **Benchmarks** against brute force, ε-constraint MILP (HiGHS) and weighted-sum scalarisation.
 
 ## Quick start
+
+**Web app only** (the engine runs in the browser, no backend needed):
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:3000
+```
+
+**Backend, tests and benchmarks:**
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[api,dev]"
-pytest -q                                        # 10 correctness tests, incl. exact == brute force
-python benchmarks/run_benchmarks.py --quick      # algorithm comparison
-uvicorn tripopt.api.main:app --reload            # http://localhost:8000/docs
+pytest -q                                      # 11 tests, incl. exact front == brute force
+python benchmarks/run_benchmarks.py --quick    # algorithm comparison
+uvicorn tripopt.api.main:app --reload          # REST API, docs at http://localhost:8000/docs
+```
+To make the web app use the REST API instead of the in-browser engine, set `NEXT_PUBLIC_API_URL=http://localhost:8000`.
 
-# in a second terminal
-cd frontend && npm install && npm run dev         # http://localhost:3000, engine runs in-browser; no backend needed
+## Data
+| Real | Simulated |
+|---|---|
+| 66 global airports: IATA code, name, city, country, coordinates, standard UTC offset | which routes exist, timetables |
+| Calendar dates, weekdays, local-time display | fares (distance model + date-dependent demand) |
+| Airline names, assigned by home region | which carrier flies a route, disruption risk |
+
+[`world.py`](backend/src/tripopt/world.py) builds weekly timetable templates and expands them for any requested date.
+To use real offers later, replace that step with an API ingestion that produces the same `Flight` records.
+
+Simplifications: standard time only (no DST), one fare per flight (no fare classes), no baggage rules.
+
+## How it works
+1. **Temporal graph.** Flights are nodes; `f → g` exists if `f` lands where `g` departs and the layover is between the
+   minimum connection time and the maximum layover. This is a DAG ordered by departure time.
+2. **Label-setting.** Flights are processed in departure order. Each carries a set of Pareto-optimal cost vectors;
+   dominated vectors are discarded, as are those exceeding a hard limit or the stop budget.
+3. **Round trips.** Outbound and inbound fronts are computed per calendar day (the only coupling is stay length), then
+   combined exactly.
+4. **Exactness.** Any continuation adds the same cost to every label at a flight, so a dominated label can never be
+   part of an optimal path. Proofs: [docs/ALGORITHMS.md](docs/ALGORITHMS.md), model: [docs/MODEL.md](docs/MODEL.md).
+
+Weights and hard limits in the UI re-rank and filter the exact front client-side; filtering by upper bounds gives
+exactly the constrained front, so no re-query is needed.
+
+## Verification
+- `pytest`: label-setting equals brute force on every tested instance; round-trip result equals pairwise enumeration;
+  hard-bound and time-zone consistency; API smoke test.
+- `npm run verify` (in `frontend/`): the TypeScript engine reproduces the Python engine's Pareto fronts exactly on
+  golden cases, and the airport search ranking passes its test cases. CI runs it before every deploy. Regenerate data and fixtures with
+  `python backend/scripts/export_network.py`.
+
+## Results
+Leg-level, synthetic data, 4 queries per scale; details and caveats in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+- Exact label-setting equals brute force everywhere; a 95k-flight network is answered in ~46 ms.
+- Weighted-sum and coarse ε-constraint recover only ~40–80 % of the true Pareto itineraries.
+- On small, sparse instances brute force is actually faster (explained in the benchmark doc).
+
+## Repository layout
+```
+backend/src/tripopt/    engine: models, graph, labelsetting, baselines, milp, roundtrip, world, api/
+backend/tests/          correctness tests
+backend/benchmarks/     benchmark harness and results
+backend/scripts/        export of world data and golden fixtures for the web app
+frontend/               Next.js app; lib/engine.ts is the in-browser engine
+docs/                   MODEL.md (math), ALGORITHMS.md, BENCHMARKS.md
+.github/workflows/      GitHub Pages deployment
 ```
 
-**Serverless demo.** `frontend/lib/engine.ts` is a TypeScript port of the Python engine, running in the browser on
-the world model `frontend/public/data/world.json` (real airports + weekly simulated templates, expanded for your dates). `npm run verify` checks it reproduces the Python
-Pareto fronts exactly on golden cases (`python backend/scripts/export_network.py` regenerates data and fixtures);
-CI runs this before every deploy. Set `NEXT_PUBLIC_API_URL` to use the FastAPI backend instead.
-To enable Pages: repo Settings → Pages → Source: GitHub Actions.
-
-**Web UI** (`frontend/`, Next.js + TypeScript, dependency-free SVG charts): query form, trade-off scatter (choose any
-two objectives), 5-objective parallel coordinates, live preference sliders and hard-limit sliders, expandable
-itineraries with layovers. Weights and limits re-rank/filter client-side with no re-query: filtering the exact front by
-upper bounds gives exactly the constrained front (docs/MODEL.md).
-Example: `POST /api/v1/search` with
-`{"origin":"JFK","destination":"SIN","depart_from_day":1155,"depart_to_day":1157,"min_stay_days":5,"max_stay_days":10,
-"max_stops":2,"weights":{"price":3,"risk":1}}`
-returns the Pareto-optimal round trips ranked by your weights, a knee ("best compromise") flag and search stats.
-`GET /api/v1/airports` lists valid codes. Days are local calendar days counted from 2024-01-01 (`depart_from_day`).
-
-## Layout
-```
-backend/src/tripopt/   models, synthetic generator, temporal graph, label-setting, baselines, MILP, round-trip, API
-backend/tests/         correctness suite     backend/benchmarks/  benchmark harness + results
-docs/MODEL.md          math model            docs/ALGORITHMS.md   algorithms & proofs
-docs/BENCHMARKS.md     results + caveats
-```
-
-## Headline results (see docs/BENCHMARKS.md)
-* Exact label-setting equals brute force on every tested instance; 95k-flight network answered in ~46 ms.
-* Weighted-sum and coarse ε-constraint recover only ~40-80 % of the true Pareto itineraries.
-* Brute force is actually faster on small sparse instances (documented, with the explanation).
+## Limitations
+- No real flight data yet; risk model is illustrative and not calibrated.
+- Benchmarks use an older, fictional-airport generator, not the global world model.
+- Web version fixes minimum connection to 60 min and maximum layover to 8 h.
+- A 5-objective front can be large; the UI lists the top 30 by your weights.
 
 ## Roadmap
-1. ~~Engine + synthetic data + tests + benchmark~~ (done)
-2. ~~Next.js UI~~ (done)
-3. PostgreSQL schema + ingestion/normalisation pipeline; real flight API (e.g. Amadeus/Duffel); calibrate risk
-4. Adversarial scaling benchmark; OR-Tools CP-SAT comparison; multi-city, train legs, hotels
+1. ~~Engine, tests, benchmarks~~ ✅
+2. ~~Web UI, serverless deployment, real geography~~ ✅
+3. Real flight API ingestion, PostgreSQL storage, risk calibration from on-time data
+4. Adversarial scaling benchmark, OR-Tools CP-SAT comparison
+5. Multi-city trips, train legs, hotels

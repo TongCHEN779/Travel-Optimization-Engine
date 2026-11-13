@@ -1,24 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import AirportPicker from "@/components/AirportPicker";
 import ItineraryCard from "@/components/ItineraryCard";
 import ParallelCoords from "@/components/ParallelCoords";
 import ScatterChart from "@/components/ScatterChart";
 import { Airport, Itinerary, LABEL, OBJ, ObjKey, SearchResponse, WEIGHT_KEY, dayOf, fmt, getAirports, isoOf, normalise, search } from "@/lib/api";
 
 const CAP_KEYS: ObjKey[] = ["price", "duration_min", "wait_min", "risk"];
-
-function AirportSelect({ airports, value, onChange }: { airports: Airport[]; value: string; onChange: (v: string) => void }) {
-  const regions = [...new Set(airports.map((a) => a.region))];
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {regions.map((r) => (
-        <optgroup key={r} label={r}>
-          {airports.filter((a) => a.region === r).map((a) => <option key={a.code} value={a.code}>{a.city} · {a.code} — {a.name}, {a.country}</option>)}
-        </optgroup>
-      ))}
-    </select>
-  );
-}
 
 export default function Home() {
   const [airports, setAirports] = useState<Airport[]>([]);
@@ -94,8 +82,10 @@ export default function Home() {
         <aside>
           <section>
             <h2>Trip</h2>
-            <label>From<AirportSelect airports={airports} value={form.origin} onChange={(v) => setForm({ ...form, origin: v })} /></label>
-            <label>To<AirportSelect airports={airports} value={form.destination} onChange={(v) => setForm({ ...form, destination: v })} /></label>
+            <AirportPicker label="From" airports={airports} value={form.origin} onChange={(v) => setForm({ ...form, origin: v })} />
+            <button type="button" className="swap" aria-label="Swap origin and destination"
+              onClick={() => setForm({ ...form, origin: form.destination, destination: form.origin })}>⇅ Swap</button>
+            <AirportPicker label="To" airports={airports} value={form.destination} onChange={(v) => setForm({ ...form, destination: v })} />
             <div className="two">
               <label>Depart from<input type="date" min={today} value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value, to: e.target.value > form.to ? e.target.value : form.to })} /></label>
               <label>Depart by<input type="date" min={form.from || today} value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></label>

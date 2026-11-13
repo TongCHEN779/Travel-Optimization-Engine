@@ -42,3 +42,17 @@ svg { width: 100%; height: auto; display: block; }
 @media (max-width: 900px) { .layout, .charts { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr 1fr; } }
 
 .notice { margin: 8px 0 0; padding: 8px 12px; font-size: 12.5px; border: 1px solid var(--c2); border-radius: 8px; background: color-mix(in srgb, var(--c2) 12%, var(--panel)); }
+
+.picker { position: relative; margin-bottom: 10px; }
+.picker > label { margin-bottom: 3px; }
+.picker input { width: 100%; padding: 9px 10px; font: inherit; font-size: 14px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.suggest { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 340px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.suggest-head, .none { padding: 6px 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.none { text-transform: none; font-size: 12.5px; letter-spacing: 0; }
+.opt { display: flex; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.opt.active { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.opt .code { flex: none; width: 42px; text-align: center; font-weight: 700; font-size: 12px; padding: 3px 0; border-radius: 5px; background: var(--bg); border: 1px solid var(--border); }
+.opt .what { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.opt .what small { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.swap { width: auto; margin: -2px 0 8px; padding: 3px 10px; font-size: 12px; font-weight: 500; background: transparent; color: var(--muted); border: 1px solid var(--border); }
